@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:p="http://www.springframework.org/schema/p"
+    xmlns:mvc="http://www.springframework.org/schema/mvc"
+    xmlns:context="http://www.springframework.org/schema/context"
+    xmlns:task="http://www.springframework.org/schema/task"
+    xmlns:websocket="http://www.springframework.org/schema/websocket"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans-4.2.xsd
+    http://www.springframework.org/schema/mvc
+    http://www.springframework.org/schema/mvc/spring-mvc-4.2.xsd
+    http://www.springframework.org/schema/context
+    http://www.springframework.org/schema/context/spring-context-4.2.xsd
+    http://www.springframework.org/schema/task
+	http://www.springframework.org/schema/task/spring-task-4.2.xsd
+	http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+	http://www.springframework.org/schema/websocket http://www.springframework.org/schema/websocket/spring-websocket.xsd">
+
+	<context:component-scan base-package="com.kylingroup"/>
+	<mvc:annotation-driven />
+	<bean id="viewResolver" class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+		<property name="prefix" value="/pages/"/>
+		<property name="suffix" value=".jsp"/>
+	</bean>
+	<bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+		<property name="defaultEncoding" value="UTF-8"/>
+		<property name="maxUploadSize" value="2000000"/>
+	</bean>
+	<mvc:resources mapping="/static/**" location="/"/>
+	<mvc:default-servlet-handler />
+       
+    <!-- spring可以自动去扫描base-pack下面的包或者子包下面的java文件，如果扫描到有Spring的相关注解的类，则把这些类注册为Spring的bean -->
+	<context:component-scan base-package="com.kylingroup.Task"/>
+   
+    <!-- 开启这个配置 spring才能识别@Scheduled注解，此注解不知什么原因，不能生效 -->
+    <!-- <task:annotation-driven/>    -->
+	<!-- 定时操作方法1:springmvc自带的定时操作 -->
+   	<bean id="myTask" class="com.kylingroup.Task.MyTask" />
+ 	<task:scheduled-tasks> 
+ 		<!-- 每五秒钟 -->
+	    <task:scheduled ref="myTask" method="job_seconds" cron="0/5 * * * * ?" /> 
+	    <!-- 十六点的每一分钟 -->
+	    <task:scheduled ref="myTask" method="job_minute" cron="0 * 16 * * ?" /> 
+	     <!-- 第天凌晨两点，可以调存储过程生成日报表-->
+	    <task:scheduled ref="myTask" method="job_day" cron="0 0 2 * * ?" />
+	    <!-- 第月第一天凌晨两点，可以调存储过程生成月报表-->
+	    <task:scheduled ref="myTask" method="job_month" cron="0 0 2 1 * ?" />
+	</task:scheduled-tasks>
+
+
+	<!-- 定时操作方法2:quartz与springmvc结合定时 ，注意此处定义了两个工作详情与两个触发器，因为两个方法需要两个不同的触发时间-->
+	<!-- 要调用的工作类 -->
+	<bean id="quartzJob" class="com.kylingroup.Task.MyTestQuartz"></bean>
+	<!-- 配置工作详情：定义调用对象和调用对象的方法 -->
+	<bean id="jobtask" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean">
+		<!-- 调用的类 -->
+		<property name="targetObject" ref="quartzJob" />
+		<!-- 调用类中的方法 -->
+		<property name="targetMethod" value="job_quartz_seconds"/>
+
+	</bean>
+	<bean id="jobtask1" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean">
+		<!-- 调用的类 -->
+		<property name="targetObject" ref="quartzJob" />
+		<!-- 调用类中的方法 -->
+		<property name="targetMethod" value="job_quartz_minute"/>
+
+	</bean>
+	<!-- 配置触发器-->
+	<bean id="doTime" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
+		<property name="jobDetail" ref="jobtask" />
+		<!-- cron表达式 -->
+		<property name="cronExpression" value="0/5 * * * * ?"/>
+	</bean>
+	<bean id="doTime1" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
+		<property name="jobDetail" ref="jobtask1" />
+		<!-- cron表达式 -->
+		<property name="cronExpression" value="0 * 17 * * ?"/>
+	</bean>
+	<!-- 配置调试器：将lazy-init='false'那么容器启动就会执行调度程序 -->
+	<bean id="startQuertz" lazy-init="false" autowire="no"
+		  class="org.springframework.scheduling.quartz.SchedulerFactoryBean">
+		<property name="triggers">
+			<list>
+				<ref bean="doTime" />
+				<ref bean="doTime1" />
+			</list>
+		</property>
+	</bean>
+
+	<bean id="websocket" class="com.kylingroup.websocket.WebsocketEndPoint"/>
+	<websocket:handlers>
+		<websocket:mapping path="/websocket" handler="websocket"/>
+		<websocket:handshake-interceptors>
+			<bean class="com.kylingroup.websocket.HandshakeInterceptor"/>
+		</websocket:handshake-interceptors>
+	</websocket:handlers>
+
+</beans>
